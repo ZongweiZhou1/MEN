@@ -27,7 +27,7 @@ def IoUs(tlbrs1, tlbrs2):
     ious = dx * dy / (unions - dx * dy + 1e-12)
     return ious  # N x 289
 
-def encoder(rois1, rois2, input_size, grid_xy=None):
+def encoder(rois1, rois2, input_size, grid_xy=None, train=True):
     """Encoder
     :param rois1:           N x 4, array, normalized, [x1, y1, x2, y2]
     :param rois2:           N x 4, array, normalized
@@ -46,7 +46,10 @@ def encoder(rois1, rois2, input_size, grid_xy=None):
                                   np.zeros((len(grid_x.flatten()), 2))), axis=1)
 
     # xywh1, xywh2 = tlbr2xywh(rois1), tlbr2xywh(rois2)
-    xywh1, xywh2 = tlbr2xywh(augment_jitter_rois(rois1)), tlbr2xywh(augment_jitter_rois(rois2))
+    if train:
+        xywh1, xywh2 = tlbr2xywh(augment_jitter_rois(rois1)), tlbr2xywh(augment_jitter_rois(rois2))
+    else:
+        xywh1, xywh2 = tlbr2xywh(rois1), tlbr2xywh(rois2)
     grid_xy = grid_xy[np.newaxis, :, :]
     xywh1[:, 2] = np.ceil(xywh1[:, 2] * input_size[1] / 10) * 10 / input_size[1]
     xywh1[:, 3] = np.ceil(xywh1[:, 3] * input_size[0] / 10) * 10 / input_size[0]

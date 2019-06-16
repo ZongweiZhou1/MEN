@@ -1,5 +1,4 @@
 import time
-import numpy as np
 import matplotlib
 import torch as t
 import visdom

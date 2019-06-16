@@ -46,9 +46,9 @@ if __name__ == '__main__':
 
     print(cls_logits.size())
     print(reg_boxes.size())
-    ims1_feats, ims1_logits = reid_res[0], reid_res[1]
+    ims1_feats, ims1_logits_list = reid_res[0], reid_res[1]
     print(len(ims1_feats))
-    print(ims1_feats[0].size())
-    print(len(ims1_logits))
-    print(ims1_logits[0].size())
+    print(ims1_feats.size())
+    print(len(ims1_logits_list))
+    print(ims1_logits_list[0].size())
 

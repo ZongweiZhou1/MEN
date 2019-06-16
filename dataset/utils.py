@@ -14,10 +14,11 @@ def random_pick(some_list, probabilities):
 
 
 def augment_brightness_image(image):
-    image1 = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-    random_bright = .25 + np.random.uniform()
-    image1[:, :, 2] = image1[:, :, 2] * random_bright
-    image1 = cv2.cvtColor(image1, cv2.COLOR_HSV2RGB)
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    hsv[:, :, 0] = hsv[:, :, 0] * (0.75 + np.random.random() * 0.5)
+    hsv[:, :, 1] = hsv[:, :, 1] * (0.75 + np.random.random() * 0.5)
+    hsv[:, :, 2] = hsv[:, :, 2] * (0.75 + np.random.random() * 0.5)
+    image1 = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
     return image1
 
 def augment_horizontal_flip(image, rois):

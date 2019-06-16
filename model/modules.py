@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torch.nn.init as init
 import torch.nn.functional as F
@@ -21,7 +22,7 @@ class trackerNet(nn.Module):
         in_feat = (2 * int(max_disp / stride) + 1) ** 2
         # class
         self.cls_conv = convolution(3, in_feat, in_feat)
-        self.cls      = nn.Linear(16**2, 2)
+        self.cls      = nn.Linear(16**2, 1)
 
         # regression
         self.reg_conv = convolution(3, in_feat, in_feat)
@@ -43,7 +44,7 @@ class trackerNet(nn.Module):
 
         roi_feats = self.roipooling(corr_feat, rois1, rois_index1)
         cls_feats = self.cls(self.cls_conv(roi_feats).view(roi_feats.size(0)*roi_feats.size(1), -1).contiguous())
-        cls_feats = cls_feats.view(roi_feats.size(0), roi_feats.size(1), -1).contiguous()
+        cls_feats = cls_feats.view(roi_feats.size(0), -1).contiguous()
         reg_feats = self.reg(self.reg_conv(roi_feats).view(roi_feats.size(0)*roi_feats.size(1), -1).contiguous())
         reg_feats = reg_feats.view(roi_feats.size(0), roi_feats.size(1), -1).contiguous()
 
@@ -52,7 +53,7 @@ class trackerNet(nn.Module):
 
         roi_feats2 = self.roipooling(corr_feat, rois2, rois_index2)
         cls_feats2 = self.cls(self.cls_conv(roi_feats2).view(roi_feats2.size(0) * roi_feats2.size(1), -1).contiguous())
-        cls_feats2 = cls_feats2.view(roi_feats2.size(0), roi_feats2.size(1), -1).contiguous()
+        cls_feats2 = cls_feats2.view(roi_feats2.size(0), -1).contiguous()
         reg_feats2 = self.reg(self.reg_conv(roi_feats2).view(roi_feats2.size(0) * roi_feats2.size(1), -1).contiguous())
         reg_feats2 = reg_feats2.view(roi_feats2.size(0), roi_feats2.size(1), -1).contiguous()
 
@@ -103,11 +104,12 @@ class reidNet(nn.Module):
         # global feat
         global_feat = self.local_conv(F.avg_pool2d(feats, (feats.size(-2), feats.size(-1)))).view(feats.size(0), -1)
         local_feat_list.append(global_feat)
+        local_feat = torch.cat(local_feat_list, dim=1)
         if hasattr(self, 'fc_list'):
             logits_list.append(self.fc(global_feat))
-            return local_feat_list, logits_list
+            return local_feat, logits_list
 
-        return local_feat_list
+        return local_feat
 
 
 class refineNet(nn.Module):
@@ -135,7 +137,7 @@ if __name__=='__main__':
     print(reg_feats.size())
     print(cls_feats2.size())
     print(reg_feats2.size())
-    local_feat_list, logits_list = reidnet(ims1, rois1, rois_index1)
-    print(len(local_feat_list))
-    print(local_feat_list[0].size())
+    local_feat, logits_list = reidnet(ims1, rois1, rois_index1)
+    print(len(logits_list))
+    print(local_feat.size())
     print(logits_list[0].size())

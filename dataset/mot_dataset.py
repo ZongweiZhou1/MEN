@@ -37,7 +37,7 @@ class MOT(data.Dataset):
 
     def get_grid_xy(self, md, s):
         xx = np.arange(-md, md+1, s)
-        yy = np.arange(md, md+1, s)
+        yy = np.arange(-md, md+1, s)
         grid_x, grid_y = np.meshgrid(xx, yy)
         grid_x = (grid_x / self.input_W) / self.featstride
         grid_y = (grid_y / self.input_H) / self.featstride
@@ -100,18 +100,20 @@ class MOT(data.Dataset):
         share_id = np.random.choice(share_id, self.max_roi_num)
         rois1 = np.array([_rois1[idx] for idx in share_id])
         rois2 = np.array([_rois2[idx] for idx in share_id])
-        # image and rois augments
-        imgs1 = augment_brightness_image(imgs1)
-        imgs2 = augment_brightness_image(imgs2)
-        if np.random.uniform() > 0.5:
-            imgs1, rois1 = augment_horizontal_flip(imgs1, rois1)
-            imgs2, rois2 = augment_horizontal_flip(imgs2, rois2)
+        clsid = np.array([int(idx) for idx in share_id])
+        if self.train:
+            # image and rois augments
+            imgs1 = augment_brightness_image(imgs1)
+            imgs2 = augment_brightness_image(imgs2)
+            if np.random.uniform() > 0.5:
+                imgs1, rois1 = augment_horizontal_flip(imgs1, rois1)
+                imgs2, rois2 = augment_horizontal_flip(imgs2, rois2)
 
         clas1, regs1, clas2, regs2 = encoder(rois1, rois2, (self.input_H/self.featstride,
                                                             self.input_W/self.featstride),
-                                             grid_xy=self.grid_xy)
+                                             grid_xy=self.grid_xy, train=self.train)
 
-        return imgs1.transpose((2, 0, 1)), rois1, imgs2.transpose((2, 0, 1)), rois2, clas1, regs1, clas2, regs2
+        return imgs1.transpose((2, 0, 1)), rois1, imgs2.transpose((2, 0, 1)), rois2, clsid, clas1, regs1, clas2, regs2
 
     @staticmethod
     def collate_fn(batch):
@@ -121,18 +123,20 @@ class MOT(data.Dataset):
             rois1:      FloatTensor, N * max_num x 4
             imgs2:      FloatTensor, N x 3 x H x W
             rois2:      FloatTensor, N * max_num x 4
+            clsid:      LongTensor,  N * max_num, the id class for ReID
             clas1:      FloatTensor, N * max_num x 289
             regs1:      FloatTensor, N * max_num x 289 x 4
             clas2:      FloatTensor, N * max_num x 289
             regs2:      FloatTensor, N * max_num x 289 x 4
             indxs:      IntTensor, N * max_num, image index for roi align
         """
-        ims1_list, rois1_list, ims2_list, rois2_list, cls1_list, regs1_list, \
+        ims1_list, rois1_list, ims2_list, rois2_list, clsid_list, cls1_list, regs1_list, \
         cls2_list, regs2_list = zip(*batch)
         imgs1 = th.FloatTensor(np.stack(ims1_list, axis=0)).contiguous()
         imgs2 = th.FloatTensor(np.stack(ims2_list, axis=0)).contiguous()
         rois1 = th.FloatTensor(np.concatenate(rois1_list, axis=0)).contiguous()
         rois2 = th.FloatTensor(np.concatenate(rois2_list, axis=0)).contiguous()
+        clsid = th.LongTensor(np.concatenate(clsid_list, axis=0)).contiguous()
         clas1 = th.FloatTensor(np.concatenate(cls1_list, axis=0)).contiguous()
         regs1 = th.FloatTensor(np.concatenate(regs1_list, axis=0)).contiguous()
         clas2 = th.FloatTensor(np.concatenate(cls2_list, axis=0)).contiguous()
@@ -140,7 +144,7 @@ class MOT(data.Dataset):
         indxs = np.array([[i] * len(rois1_list[0]) for i in range(len(ims1_list))]).flatten()
         indxs = th.IntTensor(indxs)
 
-        return imgs1, rois1, imgs2, rois2, clas1, regs1, clas2, regs2, indxs
+        return imgs1, rois1, imgs2, rois2, clsid, clas1, regs1, clas2, regs2, indxs
 
     def __len__(self):
         return len(self.lmdb['train_set']) if self.train else len(self.lmdb['val_set'])
@@ -168,12 +172,20 @@ if __name__ == '__main__':
         rois1 = v[1].numpy()  # N * max_num x 4
         imgs2 = v[2].numpy()[0]
         rois2 = v[3].numpy()
+        clsid = v[4].numpy()
 
-        clas1 = v[4].numpy()  # N * max_num x 289
-        regs1 = v[5].numpy()
-        clas2 = v[6].numpy()
-        regs2 = v[7].numpy()
-        indxs = v[8].numpy()  # N * max_num
+        clas1 = v[5].numpy()  # N * max_num x 289
+        regs1 = v[6].numpy()  # N * max_num x 289 x 4
+        clas2 = v[7].numpy()
+        regs2 = v[8].numpy()
+        indxs = v[9].numpy()  # N * max_num
+        print('======== shape of items in each sample ======')
+        print('img:', imgs1.shape)
+        print('rois:', rois1.shape)
+        print('clsid:', clsid.shape)
+        print('clas1:', clas1.shape)
+        print('regs1:', regs1.shape)
+
 
         im1   = np.transpose(imgs1, (1, 2, 0)) + mean
         im2   = np.transpose(imgs2, (1, 2, 0)) + mean
@@ -206,47 +218,5 @@ if __name__ == '__main__':
             ax.add_patch(p)
         plt.pause(3)
         plt.cla()
-
-        # ims1 = v[0].numpy()
-        # ims2 = v[1].numpy()
-        # rois1 = v[2].numpy()
-        # rois2 = v[3].numpy()
-        # ids1 = v[4].numpy()
-        # ids2 = v[5].numpy()
-        # regs = v[6].numpy()
-        # assert len(rois1) == len(rois2), 'rois should be appeared in pair'
-        # assert len(rois1) == len(ids1), 'each roi should have an id'
-        # assert len(rois2) == len(ids2), 'each roi should have an id'
-        # assert len(rois1) == len(regs), 'each roi in rois corresponds a regression target'
-        #
-        # im1 = np.transpose((ims1[0] + mean), (1, 2, 0)).astype(np.uint8)
-        # im2 = np.transpose((ims2[0] + mean), (1, 2, 0)).astype(np.uint8)
-        # zx = np.concatenate((im1, im2), axis=1)
-        # frame_sz = im1.shape[:2]
-        # ax.imshow(cv2.cvtColor(zx, cv2.COLOR_BGR2RGB))
-        # color = ['r', 'g']
-        #
-        # for j in range(len(rois1)):
-        #     w = rois1[j]
-        #     DW = frame_sz[1] * 0
-        #     p = patches.Rectangle((w[0] + DW, w[1]), (w[2] - w[0]), (w[3] - w[1]),
-        #                           fill=False, clip_on=False, linewidth=2, edgecolor=color[0])
-        #     plt.text(w[0] + 5 + DW, w[1] + 5, '%d' % int(ids1[j]), fontsize=12)
-        #     ax.add_patch(p)
-        #     DW = frame_sz[1]
-        #     p = patches.Rectangle((w[0] + DW, w[1]), (w[2] - w[0]), (w[3] - w[1]),
-        #                           fill=False, clip_on=False, linewidth=2, edgecolor=color[0])
-        #     plt.text(w[0] + 5 + DW, w[1] + 5, '%d' % int(ids1[j]), fontsize=12)
-        #     ax.add_patch(p)
-        #     w = rois2[j]
-        #     p = patches.Rectangle((w[0] + DW, w[1]), (w[2] - w[0]), (w[3] - w[1]),
-        #                           fill=False, clip_on=False, linewidth=2, edgecolor=color[1])
-        #     plt.text(w[0] + 5 + DW, w[1] + 5, '%d' % int(ids1[j]), fontsize=12)
-        #     ax.add_patch(p)
-        #
-        # plt.pause(3)
-        # plt.cla()
-
-
 
 
